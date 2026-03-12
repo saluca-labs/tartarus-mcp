@@ -1,0 +1,43 @@
+{
+  "name": "tartarus-mcp",
+  "version": "0.2.0",
+  "description": "Local-first MCP memory server. Persistent, searchable memory for any AI agent. Powered by @saluca/asphodel.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "tartarus-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "mcp",
+    "memory",
+    "ai",
+    "agent",
+    "sqlite",
+    "local-first",
+    "asphodel"
+  ],
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@saluca/asphodel": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
