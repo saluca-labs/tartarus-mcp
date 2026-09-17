@@ -1,6 +1,6 @@
 {
   "name": "tartarus-mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Local-first MCP memory server. Persistent, searchable memory for any AI agent. Powered by @saluca/asphodel.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -10,7 +10,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "check:meta": "node scripts/check-package-meta.mjs saluca-labs/tartarus-mcp"
   },
   "files": [
     "dist",
@@ -26,9 +27,17 @@
     "local-first",
     "asphodel"
   ],
-  "license": "Apache-2.0",
+  "license": "FSL-1.1-ALv2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/saluca-labs/tartarus-mcp.git"
+  },
+  "homepage": "https://github.com/saluca-labs/tartarus-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/saluca-labs/tartarus-mcp/issues"
+  },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@saluca/asphodel": "^0.1.0"
   },
   "devDependencies": {

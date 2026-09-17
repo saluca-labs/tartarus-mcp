@@ -20,6 +20,12 @@ import { join, dirname } from 'path'
 import { homedir, platform } from 'os'
 import { Asphodel, SQLiteAdapter } from '@saluca/asphodel'
 
+// The published package always ships package.json next to dist/, so the installer
+// can pin the exact version it came from instead of a floating dist-tag.
+const PKG_VERSION: string = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+).version
+
 // ── Install CLI ───────────────────────────────────────────────────────────────
 
 if (process.argv[2] === 'install') {
@@ -28,7 +34,7 @@ if (process.argv[2] === 'install') {
 }
 
 function runInstall(): void {
-  const entry = { command: 'npx', args: ['tartarus-mcp@latest'], env: {} as Record<string, string> }
+  const entry = { command: 'npx', args: [`tartarus-mcp@${PKG_VERSION}`], env: {} as Record<string, string> }
   const installed: string[] = []
   const skipped: string[]   = []
 
@@ -157,7 +163,7 @@ const TOOLS = [
 // ── MCP server ────────────────────────────────────────────────────────────────
 
 const server = new Server(
-  { name: 'tartarus-mcp', version: '0.2.0' },
+  { name: 'tartarus-mcp', version: PKG_VERSION },
   { capabilities: { tools: {} } },
 )
 
