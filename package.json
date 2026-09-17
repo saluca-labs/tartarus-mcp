@@ -11,7 +11,8 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
-    "check:meta": "node scripts/check-package-meta.mjs saluca-labs/tartarus-mcp"
+    "check:meta": "node scripts/check-package-meta.mjs saluca-labs/tartarus-mcp",
+    "smoke": "node scripts/smoke-mcp.mjs"
   },
   "files": [
     "dist",
@@ -38,7 +39,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@saluca/asphodel": "^0.1.0"
+    "@saluca/asphodel": "^0.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
