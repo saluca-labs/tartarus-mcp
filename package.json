@@ -1,7 +1,8 @@
 {
   "name": "tartarus-mcp",
-  "version": "0.2.1",
-  "description": "Local-first MCP memory server. Persistent, searchable memory for any AI agent. Powered by @saluca/asphodel.",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Local-first MCP memory server. Persistent, searchable memory for any AI agent. Built on a vendored copy of the Apache-2.0 Asphodel core.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
@@ -10,14 +11,19 @@
   },
   "scripts": {
     "build": "tsc",
+    "prepare": "tsc",
     "clean": "rm -rf dist",
+    "test": "vitest run",
     "check:meta": "node scripts/check-package-meta.mjs saluca-labs/tartarus-mcp",
-    "smoke": "node scripts/smoke-mcp.mjs"
+    "smoke": "node scripts/smoke-mcp.mjs",
+    "smoke:install": "node scripts/smoke-install.mjs"
   },
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "src/vendor/asphodel/LICENSE",
+    "src/vendor/asphodel/NOTICE"
   ],
   "keywords": [
     "mcp",
@@ -39,16 +45,15 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@saluca/asphodel": "^0.4.0"
+    "better-sqlite3": "^12.8.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.0.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.0"
   },
   "engines": {
     "node": ">=18"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }

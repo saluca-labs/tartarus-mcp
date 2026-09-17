@@ -1,0 +1,39 @@
+Asphodel
+Copyright 2026 Saluca LLC
+
+This product includes software developed at Saluca Labs (https://github.com/saluca-labs).
+
+---
+
+Vendoring notice (added by tartarus-mcp, 2026-09-16)
+
+This directory, src/vendor/asphodel/, is a vendored copy of part of Asphodel,
+the source of the npm package @saluca/asphodel 0.4.0.
+
+  Origin:   https://github.com/salucallc/asphodel
+  Commit:   af7ed6272ce88c0fc0304105ddc8861d9c6a0087
+            (the gitHead of @saluca/asphodel 0.4.0; a rebuild from this commit
+            matched all 60 files of the published tarball)
+  Licence:  Apache License, Version 2.0 (./LICENSE)
+
+The files in this directory are licensed under the Apache License 2.0, NOT
+under the Functional Source License that covers the rest of tartarus-mcp.
+The repository-root LICENSE (FSL-1.1-ALv2) does not apply to them. The tests in
+tests/vendor/asphodel/ (asphodel, fields and hybrid .test.ts) come from the same
+commit and carry the same licence; the only change to them is that their
+imports point at src/vendor/asphodel/ instead of upstream src/.
+
+Why it is vendored: Saluca retired npm as a distribution channel on 2026-09-16
+and @saluca/asphodel was removed from the registry, so tartarus-mcp can no
+longer depend on it.
+
+Files copied unmodified from upstream src/:
+  store.ts, types.ts, topic.ts, hybrid/rrf.ts, hybrid/decay.ts, hybrid/dedup.ts
+
+Files modified (Apache-2.0 section 4(b)):
+  adapters/sqlite.ts  loads the optional sqlite-vec extension through
+                      module.createRequire, because tartarus-mcp is an ES module
+                      and the CommonJS global `require` does not exist there.
+  index.ts            re-exports only the SQLite core listed above.
+
+Not vendored: adapters/postgres.ts, tartarus.ts, hybrid/local.ts, cli.ts, mcp/.
