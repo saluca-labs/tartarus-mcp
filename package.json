@@ -1,6 +1,6 @@
 {
   "name": "tartarus-mcp",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Local-first MCP memory server. Persistent, searchable memory for any AI agent. Built on a vendored copy of the Apache-2.0 Asphodel core.",
   "main": "dist/index.js",
