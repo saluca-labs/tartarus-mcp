@@ -16,7 +16,8 @@ const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 const vendoredFrom =
   /Commit:\s+([0-9a-f]{40})/.exec(readFileSync("src/vendor/asphodel/NOTICE", "utf8"))?.[1] ?? "unknown";
 
-const EXPECTED_TOOLS = ["memory_forget", "memory_list", "memory_recall", "memory_remember", "memory_search"];
+const EXPECTED_TOOLS = ["memory_forget", "memory_list", "memory_recall", "memory_remember",
+  "memory_search", "profile_get", "profile_update"];
 const failures = [];
 const check = (ok, msg) => {
   console.log(`${ok ? "ok  " : "FAIL"} ${msg}`);
@@ -81,6 +82,35 @@ try {
 
   const found = await call("memory_search", { query: marker });
   check(!found.isError && found.value?.some((m) => m.id === id), "memory_search(marker) finds the stored memory");
+
+  // ── agent profile ───────────────────────────────────────────────────────────
+  // Exercised against the BUILT server, not the unit under test: the profile lives in its own
+  // table in the same database file, and "it starts empty" is only true if the table was
+  // created at startup on a database that memory has also been writing to.
+  const fresh = await call("profile_get", {});
+  check(!fresh.isError && JSON.stringify(fresh.value?.profile) === "{}",
+    `profile_get starts empty (${JSON.stringify(fresh.value?.profile)})`);
+  check(fresh.value?.revision === 0, `fresh profile revision is 0 (got ${fresh.value?.revision})`);
+
+  const set1 = await call("profile_update", { patch: { user: { name: "Ada" }, tone: "terse" } });
+  check(set1.value?.profile?.user?.name === "Ada" && set1.value?.revision === 1,
+    "profile_update stored a nested value and bumped revision to 1");
+
+  const set2 = await call("profile_update", { patch: { user: { role: "engineer" }, tone: null } });
+  check(set2.value?.profile?.user?.name === "Ada" && set2.value?.profile?.user?.role === "engineer",
+    "profile_update merged recursively, keeping the sibling field");
+  check(!("tone" in (set2.value?.profile ?? { tone: 1 })), "profile_update with null deleted the key");
+
+  const reread = await call("profile_get", {});
+  check(reread.value?.revision === 2 && reread.value?.profile?.user?.role === "engineer",
+    "profile_get reads back the merged document");
+
+  const replaced = await call("profile_update", { patch: { only: true }, replace: true });
+  check(JSON.stringify(replaced.value?.profile) === '{"only":true}',
+    `profile_update replace:true swapped the whole document (${JSON.stringify(replaced.value?.profile)})`);
+
+  const badPatch = await call("profile_update", { patch: "not an object" });
+  check(badPatch.isError === true, "profile_update rejects a non-object patch");
 
   const forgot = await call("memory_forget", { id });
   check(forgot.value?.deleted === true, `memory_forget(${id}) returned deleted=true`);

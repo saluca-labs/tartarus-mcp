@@ -23,6 +23,7 @@ import { join, dirname, sep } from 'path'
 import { fileURLToPath } from 'url'
 import { homedir, platform } from 'os'
 import { Asphodel, SQLiteAdapter } from './vendor/asphodel/index.js'
+import { ProfileStore } from './profile.js'
 
 // package.json always sits next to dist/ in a source checkout.
 const PKG_VERSION: string = JSON.parse(
@@ -117,6 +118,10 @@ const adapter  = new SQLiteAdapter(dbPath)
 const asphodel = new Asphodel(adapter)
 await asphodel.init()
 
+// Same database file, separate table. See src/profile.ts for why the profile is not
+// stored as memories.
+const profiles = new ProfileStore(dbPath)
+
 // ── Tool definitions ──────────────────────────────────────────────────────────
 
 const TOOLS = [
@@ -178,6 +183,23 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: 'profile_get',
+    description: 'Read the agent profile: standing facts about who you work with and how. Returns {} on a fresh install. Call at the START of a session, before asking the user something they may have already told you.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'profile_update',
+    description: 'Merge changes into the agent profile. Objects merge recursively, null deletes a key, arrays replace. Use for durable facts (name, role, preferences, working agreements) - NOT for things that happened, which belong in memory_remember.',
+    inputSchema: {
+      type: 'object',
+      required: ['patch'],
+      properties: {
+        patch:   { type: 'object', description: 'Fields to merge. null as a value deletes that key.' },
+        replace: { type: 'boolean', description: 'Replace the whole document instead of merging (default: false).' },
+      },
+    },
+  },
 ]
 
 // ── MCP server ────────────────────────────────────────────────────────────────
@@ -225,6 +247,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           (a['offset'] as number | undefined) ?? 0,
         )
         break
+
+      case 'profile_get':
+        result = profiles.get()
+        break
+
+      case 'profile_update': {
+        const patch = a['patch']
+        if (typeof patch !== 'object' || patch === null || Array.isArray(patch)) {
+          throw new Error('profile_update: `patch` must be an object')
+        }
+        result = profiles.update(patch as Record<string, unknown>, {
+          replace: a['replace'] === true,
+        })
+        break
+      }
 
       default:
         throw new Error(`Unknown tool: ${name}`)

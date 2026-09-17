@@ -62,6 +62,41 @@ The first start takes about 30 seconds while it builds. Pin a full commit SHA, n
 | `memory_search` | Full-text search across all memories |
 | `memory_forget` | Delete a memory by ID |
 | `memory_list` | List recent memories |
+| `profile_get` | Read the agent profile (empty `{}` on a fresh install) |
+| `profile_update` | Merge changes into the agent profile |
+
+## Agent profile
+
+Memory answers *what happened*. The profile answers *who am I working with, and how do we work* -
+the standing facts an agent would otherwise re-derive every session, or re-ask about.
+
+It **starts empty** and the agent fills it in over time:
+
+```jsonc
+// profile_get on a fresh install
+{ "profile": {}, "updated_at": null, "revision": 0 }
+
+// profile_update { "patch": { "user": { "name": "Ada" }, "tone": "terse" } }
+{ "profile": { "user": { "name": "Ada" }, "tone": "terse" }, "revision": 1, ... }
+
+// profile_update { "patch": { "user": { "role": "engineer" }, "tone": null } }
+{ "profile": { "user": { "name": "Ada", "role": "engineer" } }, "revision": 2, ... }
+```
+
+**Merge semantics**, because this is the part that is easy to get wrong:
+
+- objects merge **recursively**, so setting one field keeps its siblings
+- `null` **deletes** a key - the only way to remove one
+- arrays **replace** wholesale; positional merging of lists is never what a caller means
+- `"replace": true` swaps the whole document, for a deliberate reset
+
+**What goes where.** Durable facts about the person, the project or the working agreement belong
+in the profile. Things that *happened* belong in `memory_remember`. The distinction matters
+because memories decay and compete for recall, while the profile is one small document meant to
+be read in full at the start of a session.
+
+The profile lives in its own table in the same SQLite file, so `memory_forget` cannot delete part
+of an identity by id and decay cannot quietly age out a working agreement.
 
 ## Config
 
