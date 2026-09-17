@@ -11,7 +11,7 @@ tartarus-mcp is not published to npm or any other package registry. Build it fro
 ```bash
 git clone https://github.com/saluca-labs/tartarus-mcp.git
 cd tartarus-mcp
-git checkout c8451c11db2aecf7ee7c0b201b9b6dcbee6fd5ee
+git checkout 67e353b1e9d314f16519f530ddec38ea9259dcee
 npm ci --ignore-scripts=false
 npm run build
 node dist/index.js install
@@ -45,7 +45,7 @@ npm can fetch and build the pinned commit straight from GitHub. This does not us
   "mcpServers": {
     "tartarus": {
       "command": "npx",
-      "args": ["-y", "--ignore-scripts=false", "github:saluca-labs/tartarus-mcp#c8451c11db2aecf7ee7c0b201b9b6dcbee6fd5ee"]
+      "args": ["-y", "--ignore-scripts=false", "github:saluca-labs/tartarus-mcp#67e353b1e9d314f16519f530ddec38ea9259dcee"]
     }
   }
 }
