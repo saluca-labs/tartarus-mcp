@@ -42,7 +42,17 @@ jobs:
           if ls node_modules/@saluca node_modules/@salucallc 2>/dev/null; then echo "a Saluca scope is installed"; exit 1; fi
           echo "OK: no @saluca/@salucallc requests or installs"
       - name: Package metadata, licence, vendoring notices and install-doc pins
+        id: meta
         run: npm run check:meta
+      - name: README pin is a commit in this branch's history
+        shell: bash
+        env:
+          PIN: ${{ steps.meta.outputs.readme_pin }}
+        run: |
+          test -n "$PIN"
+          # A squash merge would leave the pinned commit unreachable from master.
+          git merge-base --is-ancestor "$PIN" HEAD
+          echo "OK: $PIN is an ancestor of $(git rev-parse HEAD)"
       - name: Dependency audit
         run: npm audit --audit-level=low
       - run: npm run build

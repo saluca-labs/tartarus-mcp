@@ -77,6 +77,20 @@ if (existsSync(".github/workflows")) {
     }
   }
 }
+// Source-build install docs must pin one full commit SHA everywhere.
+// CI separately checks that the pinned commit is an ancestor of HEAD.
+const checkoutPins = [...readme.matchAll(/git checkout (\S+)/g)].map((m) => m[1]);
+const githubPins = [...readme.matchAll(/github:saluca-labs\/tartarus-mcp(#[^"'\s]*)?/g)].map((m) => (m[1] ?? "").slice(1));
+const pins = [...checkoutPins, ...githubPins];
+if (checkoutPins.length === 0) problems.push("README has no `git checkout <sha>` pin in the source install");
+for (const pin of pins) {
+  if (!/^[0-9a-f]{40}$/.test(pin)) problems.push(`README pins ${JSON.stringify(pin)}; pin a full 40-character commit SHA`);
+}
+if (new Set(pins).size > 1) problems.push(`README pins more than one commit: ${[...new Set(pins)].join(", ")}`);
+if (process.env.GITHUB_OUTPUT && pins.length) {
+  const { appendFileSync } = await import("node:fs");
+  appendFileSync(process.env.GITHUB_OUTPUT, `readme_pin=${pins[0]}\n`);
+}
 for (const f of ["src/vendor/asphodel/LICENSE", "src/vendor/asphodel/NOTICE"]) {
   if (!existsSync(f)) problems.push(`${f} is missing; the vendored Apache-2.0 code must keep its notices`);
 }
