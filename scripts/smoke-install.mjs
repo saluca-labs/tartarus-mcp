@@ -74,7 +74,15 @@ if (entryFromConfig) {
       stderr: "ignore",
     }));
     const { tools } = await client.listTools();
-    check(tools.length === 5, `configured command starts the server; tools/list returned ${tools.length} tools`);
+    // Assert the NAMES, not the count. A bare count passes when a tool is renamed and has to
+    // be edited for every addition anyway - this failed CI on the profile PR with nothing more
+    // useful than "returned 7 tools".
+    const names = tools.map((t) => t.name).sort();
+    const missing = ["memory_forget", "memory_list", "memory_recall", "memory_remember",
+      "memory_search", "profile_get", "profile_update"].filter((n) => !names.includes(n));
+    check(missing.length === 0,
+      `configured command starts the server; tools/list = ${names.join(",")}` +
+      (missing.length ? ` (missing: ${missing.join(",")})` : ""));
   } catch (err) {
     check(false, `configured command failed to start: ${err instanceof Error ? err.message : err}`);
   } finally {
