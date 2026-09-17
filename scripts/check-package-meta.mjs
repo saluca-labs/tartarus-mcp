@@ -40,6 +40,47 @@ if (/^Apache 2\.0/m.test(readme)) {
   problems.push("README licence section says Apache 2.0; the repo LICENSE is FSL-1.1-ALv2");
 }
 
+// npm is retired as a Saluca channel (2026-09-16): the @saluca/* and
+// @salucallc/* packages were removed from the registry and this package is not
+// published. Guard against any of that creeping back in.
+const allDeps = { ...pkg.dependencies, ...pkg.devDependencies, ...pkg.peerDependencies, ...pkg.optionalDependencies };
+for (const dep of Object.keys(allDeps)) {
+  if (/^@saluca(llc)?\//.test(dep)) problems.push(`package.json depends on ${dep}, which is no longer on npm; use the vendored code`);
+}
+if (pkg.private !== true) {
+  problems.push('package.json must be "private": true; tartarus-mcp is not published to npm');
+}
+if (pkg.publishConfig) {
+  problems.push("package.json has publishConfig; tartarus-mcp is not published to npm");
+}
+const lock = existsSync("package-lock.json") ? readFileSync("package-lock.json", "utf8") : "";
+if (/node_modules\/@saluca(llc)?\//.test(lock)) {
+  problems.push("package-lock.json still resolves an @saluca/@salucallc package from npm");
+}
+const installDocs = [["README.md", readme]];
+if (existsSync("src/index.ts")) installDocs.push(["src/index.ts", readFileSync("src/index.ts", "utf8")]);
+for (const [name, text] of installDocs) {
+  if (/npx\s+(-y\s+)?tartarus-mcp/.test(text) || /tartarus-mcp@\d/.test(text)) {
+    problems.push(`${name} installs tartarus-mcp from the npm registry; it is not published there`);
+  }
+  if (/npm\s+(i|install)\s+(-g\s+|--global\s+)?(tartarus-mcp|@saluca)/.test(text)) {
+    problems.push(`${name} tells users to npm install a Saluca package; build from source instead`);
+  }
+  if (/npmjs\.com\/package\/@saluca/.test(text)) {
+    problems.push(`${name} links to a removed npm package`);
+  }
+}
+if (existsSync(".github/workflows")) {
+  for (const f of readdirSync(".github/workflows")) {
+    if (/npm publish/.test(readFileSync(`.github/workflows/${f}`, "utf8"))) {
+      problems.push(`.github/workflows/${f} runs npm publish; npm is retired`);
+    }
+  }
+}
+for (const f of ["src/vendor/asphodel/LICENSE", "src/vendor/asphodel/NOTICE"]) {
+  if (!existsSync(f)) problems.push(`${f} is missing; the vendored Apache-2.0 code must keep its notices`);
+}
+
 if (problems.length) {
   for (const p of problems) console.error(`FAIL: ${p}`);
   process.exit(1);

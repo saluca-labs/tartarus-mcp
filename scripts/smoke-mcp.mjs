@@ -1,21 +1,20 @@
 // Runtime smoke test for the built MCP server (dist/index.js).
 // Starts the real server over stdio against a fresh SQLite file, lists the
 // tools, then stores, lists, reads back (recall + search), forgets and
-// re-lists a memory through the @saluca/asphodel SQLite adapter.
+// re-lists a memory through the vendored Asphodel SQLite adapter
+// (src/vendor/asphodel, see its NOTICE).
 // Usage: node scripts/smoke-mcp.mjs [path/to/entry.js]
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { existsSync, mkdtempSync, openSync, readSync, closeSync, readFileSync, rmSync } from "node:fs";
-import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const entry = resolve(process.argv[2] ?? "dist/index.js");
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
-const require = createRequire(import.meta.url);
-const asphodelVersion = JSON.parse(
-  readFileSync(join(require.resolve("@saluca/asphodel/package.json")), "utf8"),
-).version;
+// Which upstream commit the vendored core came from, for the log line only.
+const vendoredFrom =
+  /Commit:\s+([0-9a-f]{40})/.exec(readFileSync("src/vendor/asphodel/NOTICE", "utf8"))?.[1] ?? "unknown";
 
 const EXPECTED_TOOLS = ["memory_forget", "memory_list", "memory_recall", "memory_remember", "memory_search"];
 const failures = [];
@@ -44,7 +43,7 @@ const call = async (name, args = {}) => {
 try {
   await client.connect(transport);
   console.log(`server entry: ${entry}`);
-  console.log(`@saluca/asphodel resolved: ${asphodelVersion}`);
+  console.log(`vendored asphodel core: salucallc/asphodel@${vendoredFrom}`);
 
   const info = client.getServerVersion();
   check(info?.name === "tartarus-mcp", `server name is tartarus-mcp (got ${info?.name})`);
@@ -117,4 +116,4 @@ if (failures.length) {
   console.error(`SMOKE FAILED: ${failures.length} check(s)`);
   process.exit(1);
 }
-console.log(`SMOKE OK: tartarus-mcp@${pkg.version} with @saluca/asphodel@${asphodelVersion}`);
+console.log(`SMOKE OK: tartarus-mcp@${pkg.version} with vendored asphodel core @ ${vendoredFrom.slice(0, 7)}`);

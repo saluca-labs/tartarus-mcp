@@ -8,29 +8,54 @@ on:
 permissions:
   contents: read
 
+# There is deliberately no publish workflow. npm was retired as a Saluca
+# distribution channel on 2026-09-16 (every Saluca package was removed from the
+# registry) and tartarus-mcp is installed by building from source. The old
+# publish.yml was removed in the same change; see README "Distribution".
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+      # No `cache: npm`: every run installs from a clean npm cache.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
-          cache: 'npm'
-      - run: npm ci
-      - name: Package metadata, licence and README pins
+      - name: Install from a clean cache
+        shell: bash
+        run: |
+          export npm_config_cache="$RUNNER_TEMP/npm-cache-empty"
+          npm ci --loglevel http 2>&1 | tee npm-ci.log
+      - name: No Saluca package is fetched from npm
+        shell: bash
+        run: |
+          if grep -E '@saluca(llc)?/' npm-ci.log; then echo "npm ci requested a Saluca package"; exit 1; fi
+          if ls node_modules/@saluca node_modules/@salucallc 2>/dev/null; then echo "a Saluca scope is installed"; exit 1; fi
+          echo "OK: no @saluca/@salucallc requests or installs"
+      - name: Package metadata, licence, vendoring notices and install-doc pins
         run: npm run check:meta
       - name: Dependency audit
         run: npm audit --audit-level=low
       - run: npm run build
       - name: Smoke check the built entry point
         run: node --check dist/index.js
+      - name: Vendored asphodel core tests
+        run: npm test
       - name: Runtime smoke test (MCP server, tools/list, store/list/recall/search/forget via SQLite)
         run: npm run smoke
+      - name: Install command writes a working editor config
+        run: npm run smoke:install
       - name: Tarball contents
+        shell: bash
         run: |
           npm pack --dry-run --json > pack.json
-          node -e 'const f=require("./pack.json")[0].files.map(x=>x.path); for (const need of ["LICENSE","README.md","package.json","dist/index.js"]) { if (!f.includes(need)) { console.error("missing from tarball: "+need); process.exit(1) } } console.log(f.join("\n"))'
+          node -e 'const f=require("./pack.json")[0].files.map(x=>x.path); for (const need of ["LICENSE","README.md","package.json","dist/index.js","dist/vendor/asphodel/index.js","src/vendor/asphodel/LICENSE","src/vendor/asphodel/NOTICE"]) { if (!f.includes(need)) { console.error("missing from tarball: "+need); process.exit(1) } } console.log(f.join("\n"))'

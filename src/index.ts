@@ -2,26 +2,29 @@
 /**
  * tartarus-mcp
  *
- * Local-first MCP memory server powered by @saluca/asphodel.
+ * Local-first MCP memory server built on a vendored copy of the Apache-2.0
+ * Asphodel core (src/vendor/asphodel, see its NOTICE).
  * Persistent, searchable memory for any AI agent. Zero cloud dependencies.
  *
  * Config:
  *   TARTARUS_DB=/path/to/memory.db  (default: ~/.tartarus/memory.db)
  *
- * Install:
- *   npx tartarus-mcp install
+ * Install (from source; tartarus-mcp is not published to any package registry):
+ *   git clone https://github.com/saluca-labs/tartarus-mcp && cd tartarus-mcp
+ *   npm ci && npm run build
+ *   node dist/index.js install
  */
 
 import { Server }               from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
-import { join, dirname } from 'path'
+import { join, dirname, sep } from 'path'
+import { fileURLToPath } from 'url'
 import { homedir, platform } from 'os'
-import { Asphodel, SQLiteAdapter } from '@saluca/asphodel'
+import { Asphodel, SQLiteAdapter } from './vendor/asphodel/index.js'
 
-// The published package always ships package.json next to dist/, so the installer
-// can pin the exact version it came from instead of a floating dist-tag.
+// package.json always sits next to dist/ in a source checkout.
 const PKG_VERSION: string = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
 ).version
@@ -34,7 +37,21 @@ if (process.argv[2] === 'install') {
 }
 
 function runInstall(): void {
-  const entry = { command: 'npx', args: [`tartarus-mcp@${PKG_VERSION}`], env: {} as Record<string, string> }
+  // tartarus-mcp is built from source and is not on any package registry (npm was
+  // retired as a Saluca channel on 2026-09-16), so the editor config points `node`
+  // at this checkout's built entry point rather than at a registry package name.
+  const entryPath = fileURLToPath(import.meta.url)
+  if (entryPath.split(sep).includes('_npx')) {
+    process.stderr.write(
+      '\ntartarus-mcp install: refusing to point your editor at the npx cache\n' +
+      `  (${entryPath}), which npm may delete at any time.\n` +
+      '  Clone and build instead, then run install from the checkout:\n' +
+      '    git clone https://github.com/saluca-labs/tartarus-mcp\n' +
+      '    cd tartarus-mcp && npm ci && npm run build && node dist/index.js install\n\n',
+    )
+    process.exit(1)
+  }
+  const entry = { command: 'node', args: [entryPath], env: {} as Record<string, string> }
   const installed: string[] = []
   const skipped: string[]   = []
 
@@ -84,8 +101,11 @@ function runInstall(): void {
     process.stdout.write(`  "tartarus": ${JSON.stringify(entry, null, 4)}\n`)
   } else {
     const dbPath = process.env['TARTARUS_DB'] ?? join(homedir(), '.tartarus', 'memory.db')
-    process.stdout.write(`\n  Restart your editor to activate.\n  DB: ${dbPath}\n\n`)
+    process.stdout.write(`\n  Restart your editor to activate.\n  DB: ${dbPath}\n`)
+    process.stdout.write(`  Server: node ${entryPath} (v${PKG_VERSION})\n`)
+    process.stdout.write('  Keep this checkout in place; the editor config points at it.\n\n')
   }
+  process.stdout.write(`  Claude Code CLI: claude mcp add tartarus -- node ${JSON.stringify(entryPath)}\n\n`)
 }
 
 // ── Store setup ───────────────────────────────────────────────────────────────
