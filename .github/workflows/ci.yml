@@ -28,6 +28,8 @@ jobs:
       - run: npm run build
       - name: Smoke check the built entry point
         run: node --check dist/index.js
+      - name: Runtime smoke test (MCP server, tools/list, store/list/recall/search/forget via SQLite)
+        run: npm run smoke
       - name: Tarball contents
         run: |
           npm pack --dry-run --json > pack.json
