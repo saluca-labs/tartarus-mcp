@@ -14,6 +14,32 @@ Local-first MCP memory server. Persistent, searchable memory for any AI agent.
 
 Built on the Apache-2.0 [Asphodel](./src/vendor/asphodel/NOTICE) memory core, vendored in this repo. Zero cloud dependencies. SQLite-backed.
 
+#### How it works
+
+One `tools/call` from the client is one handler branch in `src/index.ts`, one method on the vendored core or the profile store, and one SQLite statement against a single local file.
+
+```mermaid
+flowchart TD
+  client["MCP client: Claude Code, Cursor, Windsurf, ..."] -- "tools/call over stdio" --> handler["src/index.ts<br/>CallToolRequestSchema handler"]
+  handler -- "memory_remember" --> remember["Asphodel.remember()<br/>store.ts"]
+  handler -- "memory_recall" --> recall["Asphodel.recall()"]
+  handler -- "memory_search" --> search["Asphodel.search()"]
+  handler -- "memory_forget, memory_list" --> forget["Asphodel.forget(), Asphodel.list()"]
+  handler -- "profile_get, profile_update" --> profile["ProfileStore.get(), ProfileStore.update()<br/>src/profile.ts"]
+  remember -- "no topics given" --> topics["extractTopicsLocal()<br/>topic.ts"]
+  remember -- "findByContent(), then insert()" --> adapter["SQLiteAdapter<br/>adapters/sqlite.ts"]
+  recall --> adapter
+  search --> adapter
+  forget --> adapter
+  adapter -- "insert, delete, list" --> memories[("memories table")]
+  adapter -- "recall: topic_index JOIN memories" --> topicIndex[("topic_index table")]
+  adapter -- "search: memories_fts MATCH" --> fts[("memories_fts, FTS5")]
+  memories -- "triggers mem_ai, mem_ad" --> fts
+  profile -- "one row, id = 1" --> agentProfile[("agent_profile table")]
+```
+
+All four tables live in the one file named by `TARTARUS_DB`. Two things the vendored core can do are not reached from any tool: `Asphodel.hybridSearch()` (vector search, rank fusion, decay) is never called, and `SQLiteAdapter` is constructed without `vectorDims`, so no vector table is created. `memory_remember` returns the existing memory, with `isDuplicate: true`, when identical content is already stored.
+
 #### Status
 
 Maintained. Version 0.4.0 (`package.json`). The server speaks MCP over stdio and exposes seven tools: five memory tools and two agent-profile tools. CI on Ubuntu and Windows builds it, runs the vendored core tests, and runs a smoke test that starts the real server and calls every tool.
@@ -74,6 +100,38 @@ npm can fetch and build the pinned commit straight from GitHub. This does not us
 ```
 
 The first start takes about 30 seconds while it builds. Pin a full commit SHA, never a branch.
+
+#### Agent quickstart
+
+For an agent setting this up, after the build above. Replace `/absolute/path/to/tartarus-mcp` with the checkout's absolute path; `install` prints this exact line with the path filled in.
+
+Claude Code (user or project scope is set with `claude mcp add --scope`):
+
+```bash
+claude mcp add tartarus -- node "/absolute/path/to/tartarus-mcp/dist/index.js"
+```
+
+With a non-default database file, pass `TARTARUS_DB` through Claude Code's `-e` option:
+
+```bash
+claude mcp add tartarus -e TARTARUS_DB=/path/to/memory.db -- node "/absolute/path/to/tartarus-mcp/dist/index.js"
+```
+
+Any client that reads an `mcpServers` block (Cursor's `mcp.json`, Windsurf's `mcp_config.json`, a project `.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "tartarus": {
+      "command": "node",
+      "args": ["/absolute/path/to/tartarus-mcp/dist/index.js"],
+      "env": { "TARTARUS_DB": "/path/to/memory.db" }
+    }
+  }
+}
+```
+
+`env` is optional; without it the database is `~/.tartarus/memory.db`. Once connected, call `profile_get` at the start of a session and `memory_search` before asking the user something they may already have said. The seven tool names in [Usage](#usage) are the whole surface: there are no resources or prompts.
 
 #### Quickstart
 
@@ -161,19 +219,54 @@ TARTARUS_DB=/path/to/memory.db  # default: ~/.tartarus/memory.db
 
 #### Architecture
 
+Two processes and one file. The server process is the only writer; `install` is a separate one-shot run of the same entry point that edits editor config files and exits.
+
 ```mermaid
 flowchart LR
-  C[MCP client: editor or agent] -- stdio --> S[src/index.ts<br/>MCP server, 7 tools]
-  S --> A[src/vendor/asphodel<br/>Asphodel core, Apache-2.0]
-  S --> P[src/profile.ts<br/>ProfileStore]
-  A --> DB[(SQLite file<br/>TARTARUS_DB)]
-  P --> DB
+  subgraph clientProc["MCP client process"]
+    client["editor or agent"]
+  end
+  subgraph serverProc["server process"]
+    index["node dist/index.js<br/>src/index.ts, FSL-1.1-ALv2<br/>Server + StdioServerTransport"]
+    profile["src/profile.ts<br/>ProfileStore"]
+    subgraph vendor["vendored, Apache-2.0"]
+      core["src/vendor/asphodel/store.ts<br/>Asphodel"]
+      sqlite["adapters/sqlite.ts<br/>SQLiteAdapter"]
+    end
+  end
+  subgraph disk["Local disk"]
+    db[("TARTARUS_DB<br/>default #126;/.tartarus/memory.db")]
+  end
+  subgraph installRun["node dist/index.js install (one-shot)"]
+    runInstall["runInstall()"]
+  end
+  client -- "stdio: tools/list, tools/call" --> index
+  index --> core
+  core --> sqlite
+  sqlite -- "better-sqlite3 connection 1" --> db
+  index --> profile
+  profile -- "better-sqlite3 connection 2" --> db
+  runInstall -- "adds mcpServers.tartarus if the directory exists" --> cfgClaude["#126;/.claude/settings.json<br/>not read by Claude Code"]
+  runInstall -- "same" --> cfgCursor["Cursor mcp.json"]
+  runInstall -- "same" --> cfgWindsurf["#126;/.codeium/windsurf/mcp_config.json"]
+  runInstall -- "prints" --> line["claude mcp add tartarus -- node ..."]
 ```
 
 - `src/index.ts`: the `install` command, the tool definitions and the MCP request handlers.
 - `src/vendor/asphodel/`: the vendored memory core (`Asphodel`, `SQLiteAdapter`, topic extraction, full-text search through SQLite FTS5). Its `NOTICE` lists which files were changed from upstream.
 - `src/profile.ts`: the agent profile, one JSON document in its own table of the same database.
 - `scripts/`: `check-package-meta.mjs` (licence, notices and README pin), `smoke-mcp.mjs` and `smoke-install.mjs` (runtime checks used by CI), `demo-tools.mjs` (the quickstart above).
+
+Limits fixed in the code, not configurable from a tool call: `memory_recall` and `memory_search` default to 10 results and `memory_list` to 20 (`store.ts`, `src/index.ts`); a memory keeps at most 10 topics (`store.ts`, `DEFAULT_MAX_TOPICS`); and each topic word indexes at most the 10 newest memories, so `memory_recall` on a busy topic drops the oldest from that topic while `memory_search` still finds them (`adapters/sqlite.ts`, `maxMemoriesPerTopic`).
+
+##### In this repo and not in this repo
+
+| Layer | In this repo | Licence | Where it lives |
+|---|---|---|---|
+| MCP server, `install` command, agent profile | yes | FSL-1.1-ALv2 | `src/index.ts`, `src/profile.ts` |
+| Asphodel memory core (0.4.0 line) | yes, vendored | Apache-2.0 | `src/vendor/asphodel/`, origin commit in its `NOTICE` |
+| Earlier Asphodel library line (`@saluca/asphodel` 0.3.0) | no | see that repo | [saluca-labs/elysium](https://github.com/saluca-labs/elysium) |
+| Hash-chained audit, multi-tenant isolation, team memory | no | not open source | [asphodel.ai](https://asphodel.ai) |
 
 #### Screenshots
 
@@ -214,6 +307,63 @@ _Last updated: 2026-10-22_
 
 Instructions for AI coding agents working in this repository.
 
+#### What this is
+
+A local MCP server over stdio that gives any MCP client seven tools: five memory tools on a vendored Asphodel core and two agent-profile tools, all stored in one SQLite file. TypeScript, ESM, Node.js 18 or later, built from source; it is not on npm.
+
+#### Read in this order
+
+1. [README.md](README.md) "How it works" and "Architecture": the call path from `tools/call` to a SQLite table.
+2. [src/index.ts](src/index.ts): the `install` command, the `TOOLS` array (the public interface) and the `CallToolRequestSchema` handler.
+3. [src/profile.ts](src/profile.ts): the agent profile store and its merge rules.
+4. [src/vendor/asphodel/store.ts](src/vendor/asphodel/store.ts) and [adapters/sqlite.ts](src/vendor/asphodel/adapters/sqlite.ts): what each memory tool does to the database.
+5. [scripts/smoke-mcp.mjs](scripts/smoke-mcp.mjs): the end-to-end check that pins the tool list.
+
+#### What you can and cannot see
+
+- You can see all of the server: `src/`, its tests in `tests/`, and the CI scripts in `scripts/`.
+- `src/vendor/asphodel/` is a copy of upstream Apache-2.0 code; its origin commit and local changes are in its `NOTICE`. The upstream repository is not here.
+- The hosted Asphodel product (audit chains, multi-tenant, team memory) is closed and not in this repo or any public one.
+- `dist/` and `node_modules/` are build output, not source.
+
+#### Using it as an agent
+
+After `npm ci --ignore-scripts=false && npm run build`, register the server. For Claude Code:
+
+```bash
+claude mcp add tartarus -- node "/absolute/path/to/tartarus-mcp/dist/index.js"
+```
+
+For any client that reads an `mcpServers` block:
+
+```json
+{
+  "mcpServers": {
+    "tartarus": {
+      "command": "node",
+      "args": ["/absolute/path/to/tartarus-mcp/dist/index.js"],
+      "env": { "TARTARUS_DB": "/path/to/memory.db" }
+    }
+  }
+}
+```
+
+The tools are `memory_remember`, `memory_recall`, `memory_search`, `memory_forget`, `memory_list`, `profile_get` and `profile_update`. There are no MCP resources or prompts.
+
+#### The only numbers to trust
+
+| Number | Value | Source |
+|---|---|---|
+| Version | 0.4.0 | `package.json` `version` (the server reports it in `initialize`) |
+| Tools | 7 | `TOOLS` in `src/index.ts`, pinned by `EXPECTED_TOOLS` in `scripts/smoke-mcp.mjs` |
+| Default recall and search limit | 10 | `DEFAULT_RECALL_LIMIT`, `DEFAULT_SEARCH_LIMIT` in `src/vendor/asphodel/store.ts` |
+| Default list limit | 20 | `memory_list` case in `src/index.ts` |
+| Topics per memory | at most 10 | `DEFAULT_MAX_TOPICS` in `src/vendor/asphodel/store.ts` |
+| Memories indexed per topic word | the newest 10 | `maxMemoriesPerTopic` in `src/vendor/asphodel/adapters/sqlite.ts` |
+| Runtime dependencies | 2 | `dependencies` in `package.json` |
+
+Any other figure (speed, recall quality, scale) has no source in this repo; do not state one.
+
 #### Setup
 
 ```bash
@@ -241,6 +391,7 @@ Passing looks like: vitest reports no failures, `smoke` prints `SMOKE OK: tartar
 - `src/vendor/asphodel/` is an upstream Apache-2.0 copy carried so it can be re-vendored. Do not edit it in place for tartarus-mcp features; put them in `src/` (as `src/profile.ts` does). If a vendored file must change, record the change in its `NOTICE`.
 - Tool names and their input schemas in `src/index.ts` are a public interface. Changing one means updating `README.md`, `scripts/smoke-mcp.mjs` (`EXPECTED_TOOLS`), `llms.txt` and `llms-full.txt`.
 - The README install section pins one full commit SHA, and CI checks it is an ancestor of `master`. Use merge commits, not squash, or the pin becomes unreachable.
+- The README diagrams are Mermaid source. If you change a call path they depict, change the diagram in the same PR.
 - No em-dashes in docs.
 
 #### Do not

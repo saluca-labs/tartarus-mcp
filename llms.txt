@@ -4,22 +4,38 @@
 
 Facts agents often get wrong: tartarus-mcp is not on npm (any npm package with that name is not Saluca's); install by cloning and building, pinned to a commit. It is TypeScript, ESM, Node.js 18 or later, and needs the native better-sqlite3 binding. The database path comes from TARTARUS_DB (default ~/.tartarus/memory.db). For Claude Code, register it with the printed `claude mcp add` line; the `install` command's ~/.claude/settings.json entry is not read by Claude Code.
 
-## Docs
+## Complete public surface
 
-- [README](https://github.com/saluca-labs/tartarus-mcp/blob/master/README.md): install, quickstart, tools, agent profile merge rules, licence
-- [AGENTS.md](https://github.com/saluca-labs/tartarus-mcp/blob/master/AGENTS.md): build, test and smoke commands for agents changing this repo
-- [Vendoring NOTICE](https://github.com/saluca-labs/tartarus-mcp/blob/master/src/vendor/asphodel/NOTICE): origin commit and the files changed in the vendored core
+If a tool, command or setting is not listed here, it does not exist. The tool list is pinned by `EXPECTED_TOOLS` in scripts/smoke-mcp.mjs, which CI runs against the built server.
 
-## Code
+- MCP tools (7, no resources, no prompts): `memory_remember(content, topics?)`, `memory_recall(topic, limit?)`, `memory_search(query, limit?)`, `memory_forget(id)`, `memory_list(limit?, offset?)`, `profile_get()`, `profile_update(patch, replace?)`
+- Transport: stdio only. No HTTP endpoint.
+- CLI: `node dist/index.js` (start the server), `node dist/index.js install` (write editor MCP config entries, print the `claude mcp add` line)
+- Environment: `TARTARUS_DB` (database file path) is the only setting. `install` also reads `APPDATA` on Windows, only to locate Cursor's config.
+- npm scripts: `build`, `test`, `smoke`, `smoke:install`, `check:meta`, `clean`, `prepare`
+- Register with Claude Code: `claude mcp add tartarus -- node "/absolute/path/to/tartarus-mcp/dist/index.js"`
+- Register elsewhere: `{"mcpServers": {"tartarus": {"command": "node", "args": ["/absolute/path/to/tartarus-mcp/dist/index.js"]}}}`
+
+## Start here
+
+- [README](https://github.com/saluca-labs/tartarus-mcp/blob/master/README.md): how it works (diagram), install, agent quickstart, tools, agent profile merge rules, licence
+- [AGENTS.md](https://github.com/saluca-labs/tartarus-mcp/blob/master/AGENTS.md): orientation, the numbers to trust, build, test and smoke commands for agents changing this repo
+
+## In depth
 
 - [src/index.ts](https://github.com/saluca-labs/tartarus-mcp/blob/master/src/index.ts): MCP server, tool definitions, the install command
 - [src/profile.ts](https://github.com/saluca-labs/tartarus-mcp/blob/master/src/profile.ts): agent profile store and its merge semantics
 - [src/vendor/asphodel/store.ts](https://github.com/saluca-labs/tartarus-mcp/blob/master/src/vendor/asphodel/store.ts): Asphodel memory core (remember, recall, search, forget, list)
-- [src/vendor/asphodel/adapters/sqlite.ts](https://github.com/saluca-labs/tartarus-mcp/blob/master/src/vendor/asphodel/adapters/sqlite.ts): SQLite schema and FTS5 search
+- [src/vendor/asphodel/adapters/sqlite.ts](https://github.com/saluca-labs/tartarus-mcp/blob/master/src/vendor/asphodel/adapters/sqlite.ts): SQLite schema, topic index and FTS5 search
+
+## Build on it or verify it
+
 - [scripts/smoke-mcp.mjs](https://github.com/saluca-labs/tartarus-mcp/blob/master/scripts/smoke-mcp.mjs): end-to-end check of every tool over stdio
+- [scripts/demo-tools.mjs](https://github.com/saluca-labs/tartarus-mcp/blob/master/scripts/demo-tools.mjs): the README quickstart, one store-and-search round trip
+- [Vendoring NOTICE](https://github.com/saluca-labs/tartarus-mcp/blob/master/src/vendor/asphodel/NOTICE): origin commit and the files changed in the vendored core
 
 ## Optional
 
-- [llms-full.txt](https://github.com/saluca-labs/tartarus-mcp/blob/master/llms-full.txt): the README in full, for one-fetch context
+- [llms-full.txt](https://github.com/saluca-labs/tartarus-mcp/blob/master/llms-full.txt): the README and AGENTS.md in full, for one-fetch context
 - [LICENSE](https://github.com/saluca-labs/tartarus-mcp/blob/master/LICENSE): Functional Source License 1.1, Apache 2.0 Future License
 - [Model Context Protocol](https://modelcontextprotocol.io): the protocol this server implements
