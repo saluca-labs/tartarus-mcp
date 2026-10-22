@@ -141,7 +141,12 @@ export async function runInstall(o: InstallOptions): Promise<number> {
     }
     const servers = (config.mcpServers ?? {}) as Record<string, unknown>
     if (servers['tartarus']) {
+      const existing = servers['tartarus'] as { args?: unknown[] }
+      const target = Array.isArray(existing?.args) ? String(existing.args[0] ?? '') : ''
       skipped.push(`${t.client} (already installed in ${t.path})`)
+      if (target && target !== o.entryPath) {
+        notes.push(`${t.client}: the existing tartarus entry in ${t.path} points at ${target}, not this checkout. It was left as it is.`)
+      }
       continue
     }
     const next = { ...config, mcpServers: { ...servers, tartarus: entry } }
@@ -273,6 +278,8 @@ function findOnPath(name: string, platform: NodeJS.Platform, env: NodeJS.Process
   return null
 }
 
+const CLAUDE_CLI_TIMEOUT_MS = 60_000
+
 function winQuote(a: string): string {
   return `"${a.replace(/"/g, '""')}"`
 }
@@ -289,15 +296,25 @@ export function defaultClaudeCli(env: NodeJS.ProcessEnv = process.env, platform:
     if (!exe || (override && !existsSync(override))) return null
     let r
     const ext = extname(exe).toLowerCase()
+    const common = { encoding: 'utf8' as const, env, timeout: CLAUDE_CLI_TIMEOUT_MS }
     if (ext === '.js' || ext === '.mjs') {
-      r = spawnSync(process.execPath, [exe, ...args], { encoding: 'utf8', env })
+      r = spawnSync(process.execPath, [exe, ...args], common)
     } else if (platform === 'win32' && (ext === '.cmd' || ext === '.bat')) {
+      // cmd.exe expands %VAR% even inside double quotes, so a path containing
+      // '%' cannot be passed through it safely. Refuse rather than register
+      // a different path than the one shown.
+      if ([exe, ...args].some(a => a.includes('%'))) {
+        return { status: 1, stdout: '', stderr: "refusing to pass a path containing '%' through cmd.exe; run the printed claude command by hand" }
+      }
       const line = [exe, ...args].map(winQuote).join(' ')
       r = spawnSync(env['ComSpec'] ?? 'cmd.exe', ['/d', '/s', '/c', `"${line}"`], {
-        encoding: 'utf8', env, windowsVerbatimArguments: true,
+        ...common, windowsVerbatimArguments: true,
       })
     } else {
-      r = spawnSync(exe, args, { encoding: 'utf8', env })
+      r = spawnSync(exe, args, common)
+    }
+    if (r.error && (r.error as NodeJS.ErrnoException).code === 'ETIMEDOUT') {
+      return { status: null, stdout: '', stderr: `claude ${args.slice(0, 2).join(' ')} timed out after ${CLAUDE_CLI_TIMEOUT_MS / 1000}s` }
     }
     if (r.error) return null
     return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }

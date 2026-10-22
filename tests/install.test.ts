@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { tmpdir } from 'os'
-import { runInstall, backupStamp, parseInstallFlags, type InstallOptions, type ClaudeCli } from '../src/install.js'
+import { runInstall, backupStamp, parseInstallFlags, defaultClaudeCli, type InstallOptions, type ClaudeCli } from '../src/install.js'
 
 const NOW = new Date('2026-10-22T18:30:05.123Z')
 const STAMP = '20261022T183005Z'
@@ -171,6 +171,24 @@ describe('Claude Code', () => {
     await runInstall(opts({ claudeCli: cli(false) }))
     expect(readFileSync(legacy, 'utf8')).toBe(text)
     expect(out).toMatch(/never read it/)
+  })
+})
+
+describe('review regressions', () => {
+  it('reports an existing entry that points at a different checkout', async () => {
+    writeFileSync(windsurf, JSON.stringify({ mcpServers: { tartarus: { command: 'node', args: ['/old/checkout/dist/index.js'] } } }))
+    await runInstall(opts())
+    expect(out).toContain('/old/checkout/dist/index.js')
+    expect(out).toMatch(/not this checkout/)
+  })
+
+  it('refuses to pass a path containing % through cmd.exe', () => {
+    const fake = join(home, 'claude.cmd')
+    writeFileSync(fake, '@echo off')
+    const cli = defaultClaudeCli({ TARTARUS_CLAUDE_CLI: fake }, 'win32')
+    const r = cli(['mcp', 'add', '--', 'node', 'C:/pct/%MYVAR%/index.js'])
+    expect(r?.status).toBe(1)
+    expect(r?.stderr).toMatch(/refusing/)
   })
 })
 

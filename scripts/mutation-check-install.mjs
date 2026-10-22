@@ -17,10 +17,15 @@ const MUTATIONS = [
     "    { client: 'Windsurf', path: join(o.home, '.codeium', 'windsurf', 'mcp_config.json') },\n",
     "    { client: 'Windsurf', path: join(o.home, '.codeium', 'windsurf', 'mcp_config.json') },\n    { client: 'Claude Code', path: join(o.home, '.claude', 'settings.json') },\n"],
   ["dry-run writes", "  if (o.dryRun) {", "  if (false) {"],
+  ["stale entry pointing elsewhere not reported", "      if (target && target !== o.entryPath) {", "      if (false) {"],
+  ["% passed through cmd.exe", "      if ([exe, ...args].some(a => a.includes('%'))) {", "      if (false) {"],
   ["non-TTY without --yes applies", "    if (!o.isTTY) {\n", "    if (false) {\n"],
 ];
 
-const original = readFileSync(FILE, "utf8");
+const raw = readFileSync(FILE);
+// Anchors are LF; a Windows checkout with autocrlf has CRLF. Mutate an LF copy
+// and restore the original bytes exactly.
+const original = raw.toString("utf8").replace(/\r\n/g, "\n");
 let survived = 0;
 for (const [name, from, to] of MUTATIONS) {
   if (original.split(from).length !== 2) {
@@ -35,7 +40,7 @@ for (const [name, from, to] of MUTATIONS) {
     const line = (r.stdout.match(/Tests\s+[^\n]+/) || ["?"])[0].trim();
     console.log(`${killed ? "KILLED  " : "SURVIVED"} ${name}: ${line}`);
   } finally {
-    writeFileSync(FILE, original);
+    writeFileSync(FILE, raw);
   }
 }
 const final = spawnSync("npx", ["vitest", "run", ...TESTS], { encoding: "utf8", shell: process.platform === "win32" });
