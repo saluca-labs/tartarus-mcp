@@ -1,0 +1,25 @@
+# tartarus-mcp
+
+> Local-first MCP memory server: persistent, searchable SQLite memory and a small agent profile for any MCP client, over stdio. FSL-1.1-ALv2, with a vendored Apache-2.0 Asphodel core.
+
+Facts agents often get wrong: tartarus-mcp is not on npm (any npm package with that name is not Saluca's); install by cloning and building, pinned to a commit. It is TypeScript, ESM, Node.js 18 or later, and needs the native better-sqlite3 binding. The database path comes from TARTARUS_DB (default ~/.tartarus/memory.db). For Claude Code, register it with the printed `claude mcp add` line; the `install` command's ~/.claude/settings.json entry is not read by Claude Code.
+
+## Docs
+
+- [README](https://github.com/saluca-labs/tartarus-mcp/blob/master/README.md): install, quickstart, tools, agent profile merge rules, licence
+- [AGENTS.md](https://github.com/saluca-labs/tartarus-mcp/blob/master/AGENTS.md): build, test and smoke commands for agents changing this repo
+- [Vendoring NOTICE](https://github.com/saluca-labs/tartarus-mcp/blob/master/src/vendor/asphodel/NOTICE): origin commit and the files changed in the vendored core
+
+## Code
+
+- [src/index.ts](https://github.com/saluca-labs/tartarus-mcp/blob/master/src/index.ts): MCP server, tool definitions, the install command
+- [src/profile.ts](https://github.com/saluca-labs/tartarus-mcp/blob/master/src/profile.ts): agent profile store and its merge semantics
+- [src/vendor/asphodel/store.ts](https://github.com/saluca-labs/tartarus-mcp/blob/master/src/vendor/asphodel/store.ts): Asphodel memory core (remember, recall, search, forget, list)
+- [src/vendor/asphodel/adapters/sqlite.ts](https://github.com/saluca-labs/tartarus-mcp/blob/master/src/vendor/asphodel/adapters/sqlite.ts): SQLite schema and FTS5 search
+- [scripts/smoke-mcp.mjs](https://github.com/saluca-labs/tartarus-mcp/blob/master/scripts/smoke-mcp.mjs): end-to-end check of every tool over stdio
+
+## Optional
+
+- [llms-full.txt](https://github.com/saluca-labs/tartarus-mcp/blob/master/llms-full.txt): the README in full, for one-fetch context
+- [LICENSE](https://github.com/saluca-labs/tartarus-mcp/blob/master/LICENSE): Functional Source License 1.1, Apache 2.0 Future License
+- [Model Context Protocol](https://modelcontextprotocol.io): the protocol this server implements

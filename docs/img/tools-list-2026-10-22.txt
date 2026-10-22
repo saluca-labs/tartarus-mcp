@@ -1,0 +1,17 @@
+$ node scripts/demo-tools.mjs
+MCP client -> node dist/index.js (stdio)
+server: tartarus-mcp 0.4.0
+
+tools/list:
+  memory_remember(content, topics?)
+  memory_recall(topic, limit?)
+  memory_search(query, limit?)
+  memory_forget(id)
+  memory_list(limit?, offset?)
+  profile_get()
+  profile_update(patch, replace?)
+
+tools/call memory_remember {"content":"The user prefers SQLite for local tools","topics":["preferences"]}
+  -> id 1, topics ["preferences"]
+tools/call memory_search {"query":"SQLite"}
+  -> id 1: The user prefers SQLite for local tools
