@@ -12,18 +12,20 @@
  * Install (from source; tartarus-mcp is not published to any package registry):
  *   git clone https://github.com/saluca-labs/tartarus-mcp && cd tartarus-mcp
  *   npm ci && npm run build
- *   node dist/index.js install
+ *   node dist/index.js install            (asks first; --yes, --dry-run)
  */
 
 import { Server }               from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { existsSync, readFileSync, mkdirSync } from 'fs'
 import { join, dirname, sep } from 'path'
 import { fileURLToPath } from 'url'
 import { homedir, platform } from 'os'
 import { Asphodel, SQLiteAdapter } from './vendor/asphodel/index.js'
 import { ProfileStore } from './profile.js'
+import { createInterface } from 'readline/promises'
+import { defaultClaudeCli, parseInstallFlags, runInstall } from './install.js'
 
 // package.json always sits next to dist/ in a source checkout.
 const PKG_VERSION: string = JSON.parse(
@@ -33,11 +35,10 @@ const PKG_VERSION: string = JSON.parse(
 // ── Install CLI ───────────────────────────────────────────────────────────────
 
 if (process.argv[2] === 'install') {
-  runInstall()
-  process.exit(0)
+  process.exit(await installCommand(process.argv.slice(3)))
 }
 
-function runInstall(): void {
+async function installCommand(argv: string[]): Promise<number> {
   // tartarus-mcp is built from source and is not on any package registry (npm was
   // retired as a Saluca channel on 2026-09-16), so the editor config points `node`
   // at this checkout's built entry point rather than at a registry package name.
@@ -50,63 +51,38 @@ function runInstall(): void {
       '    git clone https://github.com/saluca-labs/tartarus-mcp\n' +
       '    cd tartarus-mcp && npm ci && npm run build && node dist/index.js install\n\n',
     )
-    process.exit(1)
+    return 1
   }
-  const entry = { command: 'node', args: [entryPath], env: {} as Record<string, string> }
-  const installed: string[] = []
-  const skipped: string[]   = []
-
-  const clients: Array<{ name: string; path: string }> = [
-    {
-      name: 'Claude Code',
-      path: join(homedir(), '.claude', 'settings.json'),
-    },
-    {
-      name: 'Cursor',
-      path: platform() === 'win32'
-        ? join(process.env['APPDATA'] ?? homedir(), 'Cursor', 'mcp.json')
-        : join(homedir(), '.cursor', 'mcp.json'),
-    },
-    {
-      name: 'Windsurf',
-      path: join(homedir(), '.codeium', 'windsurf', 'mcp_config.json'),
-    },
-  ]
-
-  for (const client of clients) {
-    try {
-      if (!existsSync(dirname(client.path))) continue
-      mkdirSync(dirname(client.path), { recursive: true })
-      const raw     = existsSync(client.path) ? readFileSync(client.path, 'utf8') : '{}'
-      const config  = JSON.parse(raw) as Record<string, unknown>
-      const servers = (config.mcpServers ?? {}) as Record<string, unknown>
-      if (servers['tartarus']) {
-        skipped.push(client.name + ' (already installed)')
-      } else {
-        servers['tartarus'] = entry
-        config.mcpServers   = servers
-        writeFileSync(client.path, JSON.stringify(config, null, 2) + '\n', 'utf8')
-        installed.push(client.name)
+  const flags = parseInstallFlags(argv)
+  if (flags.unknown.length) {
+    process.stderr.write(`tartarus-mcp install: unknown option ${flags.unknown.join(' ')}\n` +
+      '  usage: tartarus-mcp install [--yes] [--dry-run]\n')
+    return 2
+  }
+  const code = await runInstall({
+    home: homedir(),
+    platform: platform(),
+    appData: process.env['APPDATA'],
+    entryPath,
+    yes: flags.yes,
+    dryRun: flags.dryRun,
+    isTTY: Boolean(process.stdin.isTTY && process.stdout.isTTY),
+    prompt: async (q) => {
+      const rl = createInterface({ input: process.stdin, output: process.stdout })
+      try {
+        return /^y(es)?$/i.test((await rl.question(q)).trim())
+      } finally {
+        rl.close()
       }
-    } catch (err) {
-      process.stderr.write(`  ✗ ${client.name}: ${(err as Error).message}\n`)
-    }
-  }
-
-  process.stdout.write('\ntartarus-mcp install\n\n')
-  if (installed.length) process.stdout.write(installed.map(c => `  ✓ ${c}`).join('\n') + '\n')
-  if (skipped.length)   process.stdout.write(skipped.map(c   => `  – ${c}`).join('\n') + '\n')
-  if (!installed.length && !skipped.length) {
-    process.stdout.write('  No supported MCP clients found.\n\n')
-    process.stdout.write('  Add manually to your MCP settings:\n\n')
-    process.stdout.write(`  "tartarus": ${JSON.stringify(entry, null, 4)}\n`)
-  } else {
-    const dbPath = process.env['TARTARUS_DB'] ?? join(homedir(), '.tartarus', 'memory.db')
-    process.stdout.write(`\n  Restart your editor to activate.\n  DB: ${dbPath}\n`)
-    process.stdout.write(`  Server: node ${entryPath} (v${PKG_VERSION})\n`)
-    process.stdout.write('  Keep this checkout in place; the editor config points at it.\n\n')
-  }
-  process.stdout.write(`  Claude Code CLI: claude mcp add tartarus -- node ${JSON.stringify(entryPath)}\n\n`)
+    },
+    claudeCli: defaultClaudeCli(),
+    now: () => new Date(),
+    out: (s) => { process.stdout.write(s) },
+    err: (s) => { process.stderr.write(s) },
+  })
+  const dbPath = process.env['TARTARUS_DB'] ?? join(homedir(), '.tartarus', 'memory.db')
+  process.stdout.write(`  DB: ${dbPath}  (v${PKG_VERSION})\n\n`)
+  return code
 }
 
 // ── Store setup ───────────────────────────────────────────────────────────────
