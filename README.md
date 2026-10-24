@@ -1,3 +1,5 @@
+![tartarus-mcp](docs/img/banner-2026-10-23.jpg)
+
 # tartarus-mcp
 
 Local-first MCP memory server. Persistent, searchable memory for any AI agent.
